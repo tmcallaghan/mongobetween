@@ -11,35 +11,41 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/coinbase/mongobetween/mongo"
+	"github.com/coinbase/mongobetween/util"
 )
 
 type connection struct {
-	log    *zap.Logger
-	statsd *statsd.Client
+	log          *zap.Logger
+	statsd       *statsd.Client
+	actionLogger *util.ActionLogger
 
-	address string
-	conn    net.Conn
-	kill    chan interface{}
-	buffer  []byte
+	address      string
+	remoteAddr   string
+	conn         net.Conn
+	kill         chan interface{}
+	buffer       []byte
 
 	mongoLookup MongoLookup
 	dynamic     *Dynamic
 }
 
-func handleConnection(log *zap.Logger, sd *statsd.Client, address string, conn net.Conn, mongoLookup MongoLookup, dynamic *Dynamic, kill chan interface{}) {
+func handleConnection(log *zap.Logger, sd *statsd.Client, address string, conn net.Conn, mongoLookup MongoLookup, dynamic *Dynamic, actionLogger *util.ActionLogger, kill chan interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error("Connection crashed", zap.String("panic", fmt.Sprintf("%v", r)), zap.String("stack", string(debug.Stack())))
 		}
 	}()
 
+	remoteAddr := conn.RemoteAddr().String()
 	c := connection{
-		log:    log,
-		statsd: sd,
+		log:          log,
+		statsd:       sd,
+		actionLogger: actionLogger,
 
-		address: address,
-		conn:    conn,
-		kill:    kill,
+		address:    address,
+		remoteAddr: remoteAddr,
+		conn:       conn,
+		kill:       kill,
 
 		mongoLookup: mongoLookup,
 		dynamic:     dynamic,
@@ -113,6 +119,16 @@ func (c *connection) handleMessage() (err error) {
 
 	if unacknowledged {
 		c.log.Debug("Unacknowledged request")
+		c.actionLogger.Log(util.ActionLog{
+			RemoteAddress:  c.remoteAddr,
+			OpCode:         int32(op.OpCode()),
+			Command:        string(command),
+			Collection:     collection,
+			IsMaster:       isMaster,
+			Unacknowledged: true,
+			RequestSize:    len(wm),
+			WireMessage:    string(wm),
+		})
 		return
 	}
 
@@ -130,6 +146,17 @@ func (c *connection) handleMessage() (err error) {
 		zap.Int32("op_code", int32(res.Op.OpCode())),
 		zap.Int("response_size", len(res.Wm)),
 	)
+	c.actionLogger.Log(util.ActionLog{
+		RemoteAddress:  c.remoteAddr,
+		OpCode:         int32(op.OpCode()),
+		Command:        string(command),
+		Collection:     collection,
+		IsMaster:       isMaster,
+		Unacknowledged: false,
+		RequestSize:    len(wm),
+		ResponseSize:   len(res.Wm),
+		WireMessage:    string(wm),
+	})
 	return
 }
 

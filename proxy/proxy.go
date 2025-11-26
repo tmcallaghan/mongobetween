@@ -28,14 +28,15 @@ type Proxy struct {
 	address string
 	unlink  bool
 
-	mongoLookup MongoLookup
-	dynamic     *Dynamic
+	mongoLookup  MongoLookup
+	dynamic      *Dynamic
+	actionLogger *util.ActionLogger
 
 	quit chan interface{}
 	kill chan interface{}
 }
 
-func NewProxy(log *zap.Logger, sd *statsd.Client, label, network, address string, unlink bool, mongoLookup MongoLookup, dynamic *Dynamic) (*Proxy, error) {
+func NewProxy(log *zap.Logger, sd *statsd.Client, label, network, address string, unlink bool, mongoLookup MongoLookup, dynamic *Dynamic, actionLogger *util.ActionLogger) (*Proxy, error) {
 	if label != "" {
 		log = log.With(zap.String("cluster", label))
 
@@ -53,8 +54,9 @@ func NewProxy(log *zap.Logger, sd *statsd.Client, label, network, address string
 		address: address,
 		unlink:  unlink,
 
-		mongoLookup: mongoLookup,
-		dynamic:     dynamic,
+		mongoLookup:  mongoLookup,
+		dynamic:      dynamic,
+		actionLogger: actionLogger,
 
 		quit: make(chan interface{}),
 		kill: make(chan interface{}),
@@ -162,7 +164,7 @@ func (p *Proxy) accept(l net.Listener) {
 		opened("connection_opened", []string{})
 		go func() {
 			log.Info("Accept")
-			handleConnection(log, p.statsd, p.address, c, p.mongoLookup, p.dynamic, p.kill)
+			handleConnection(log, p.statsd, p.address, c, p.mongoLookup, p.dynamic, p.actionLogger, p.kill)
 
 			_ = c.Close()
 			log.Info("Close")

@@ -32,6 +32,8 @@ Usage: mongobetween [OPTIONS] address1=uri1 [address2=uri2] ...
     	MongoDB username
   -dynamic string
     	File or URL to query for dynamic configuration
+  -actionlog string
+    	File path for logging all client actions
   -enable-sdam-metrics
         Enable SDAM(Server Discovery And Monitoring) metrics
   -enable-sdam-logging
@@ -56,6 +58,25 @@ mongobetween -network unix \
 ```
 
 The `label` query parameter in the connection URI is used to any tag statsd metrics or logs for that connection.
+
+### Action logging
+
+To log every client action to a file, use the `-actionlog` flag:
+```
+mongobetween -actionlog /var/log/mongobetween-actions.log ":27016=mongodb://localhost:27017/test"
+```
+
+Each line in the log file is a JSON object containing:
+- `timestamp` - ISO 8601 timestamp
+- `remote_address` - Client's remote address
+- `op_code` - MongoDB operation code
+- `command` - MongoDB command name
+- `collection` - Target collection
+- `is_master` - Whether this is an ismaster command
+- `unacknowledged` - Whether this is an unacknowledged write
+- `request_size` - Size of the request in bytes
+- `response_size` - Size of the response in bytes (omitted for unacknowledged writes)
+- `wire_message` - Full MongoDB wire protocol message for replay
 
 ### Dynamic configuration
 

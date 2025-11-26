@@ -37,6 +37,7 @@ type Config struct {
 	level      zapcore.Level
 	dynamic    string
 	statsdaddr string
+	actionlog  string
 	logger     *zap.Logger
 	statsd     *statsd.Client
 }
@@ -73,8 +74,17 @@ func (c *Config) Statsd() *statsd.Client {
 	return c.statsd
 }
 
+func (c *Config) ActionLog() string {
+	return c.actionlog
+}
+
 func (c *Config) Proxies(log *zap.Logger) (proxies []*proxy.Proxy, err error) {
 	d, err := proxy.NewDynamic(c.dynamic, log)
+	if err != nil {
+		return nil, err
+	}
+
+	actionLogger, err := util.NewActionLogger(c.actionlog)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +102,7 @@ func (c *Config) Proxies(log *zap.Logger) (proxies []*proxy.Proxy, err error) {
 	}
 
 	for _, client := range c.clients {
-		p, err := proxy.NewProxy(log, c.statsd, client.label, c.network, client.address, c.unlink, mongoLookup, d)
+		p, err := proxy.NewProxy(log, c.statsd, client.label, c.network, client.address, c.unlink, mongoLookup, d, actionLogger)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +127,7 @@ func parseFlags() (*Config, error) {
 	}
 
 	var unlink, ping, pretty, enableSdamMetrics, enableSdamLogging bool
-	var network, username, password, stats, loglevel, dynamic string
+	var network, username, password, stats, loglevel, dynamic, actionlog string
 	flag.StringVar(&network, "network", "tcp4", "One of: tcp, tcp4, tcp6, unix or unixpacket")
 	flag.StringVar(&username, "username", "", "MongoDB username")
 	flag.StringVar(&password, "password", "", "MongoDB password")
@@ -127,6 +137,7 @@ func parseFlags() (*Config, error) {
 	flag.BoolVar(&pretty, "pretty", false, "Pretty print logging")
 	flag.StringVar(&loglevel, "loglevel", "info", "One of: debug, info, warn, error, dpanic, panic, fatal")
 	flag.StringVar(&dynamic, "dynamic", "", "File or URL to query for dynamic configuration")
+	flag.StringVar(&actionlog, "actionlog", "", "File path for logging all client actions")
 	flag.BoolVar(&enableSdamMetrics, "enable-sdam-metrics", false, "Enable SDAM(Server Discovery And Monitoring) metrics")
 	flag.BoolVar(&enableSdamLogging, "enable-sdam-logging", false, "Enable SDAM(Server Discovery And Monitoring) logging")
 
@@ -138,6 +149,7 @@ func parseFlags() (*Config, error) {
 	stats = expandEnv(stats)
 	loglevel = expandEnv(loglevel)
 	dynamic = expandEnv(dynamic)
+	actionlog = expandEnv(actionlog)
 
 	level := zap.InfoLevel
 	if loglevel != "" {
@@ -202,6 +214,7 @@ func parseFlags() (*Config, error) {
 		clients:    clients,
 		level:      level,
 		dynamic:    dynamic,
+		actionlog:  actionlog,
 		logger:     loggerClient,
 		statsd:     statsdClient,
 	}, nil
