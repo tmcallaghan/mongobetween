@@ -127,7 +127,7 @@ func (c *connection) handleMessage() (err error) {
 			IsMaster:       isMaster,
 			Unacknowledged: true,
 			RequestSize:    len(wm),
-			WireMessage:    string(wm),
+			WireMessage:    op.String(),
 		})
 		return
 	}
@@ -155,7 +155,7 @@ func (c *connection) handleMessage() (err error) {
 		Unacknowledged: false,
 		RequestSize:    len(wm),
 		ResponseSize:   len(res.Wm),
-		WireMessage:    string(wm),
+		WireMessage:    op.String(),
 	})
 	return
 }
